@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8" />
+  <title>Harta Plantelor - iNaturalist</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>🌿</text></svg>">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #search {
+      padding: 1rem;
+      background: #e0f2f1;
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    input {
+      padding: 0.5rem;
+      width: 300px;
+      max-width: 100%;
+    }
+
+    button {
+      padding: 0.5rem 1rem;
+      cursor: pointer;
+    }
+
+    #map {
+      flex: 1;
+    }
+    button:hover {
+        background-color: #388e3c;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="search">
+    <label for="plantInput">🌱 Caută plantă (nume științific):</label>
+    <input type="text" id="plantInput" value="Lavandula angustifolia" />
+    <button onclick="searchPlant()" style="
+        background-color: #4caf50;
+        color: white;
+        border: none;
+        padding: 0.6rem 1.2rem;
+        font-size: 1rem;
+        border-radius: 6px;
+        cursor: pointer;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        transition: background-color 0.3s ease;
+        "
+    >
+        🌿 Caută
+    </button>
+
+  </div>
+
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    const map = L.map('map').setView([20, 0], 2);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    function clearMarkers() {
+      map.eachLayer(layer => {
+        if (layer instanceof L.Marker) {
+          map.removeLayer(layer);
+        }
+      });
+    }
+
+    async function searchPlant() {
+      const query = document.getElementById("plantInput").value.trim();
+
+      if (!query) {
+        alert("Introduceți un nume științific valid.");
+        return;
+      }
+
+      clearMarkers();
+
+      try {
+        const res = await fetch(`https://api.inaturalist.org/v1/observations?taxon_name=${encodeURIComponent(query)}&per_page=100&geo=true`);
+        const data = await res.json();
+
+        if (!data.results.length) {
+          alert("Nicio observație găsită pe iNaturalist.");
+          return;
+        }
+
+        data.results.forEach(obs => {
+          const lat = obs.geojson?.coordinates[1];
+          const lng = obs.geojson?.coordinates[0];
+          const name = obs.taxon?.name || query;
+          const photo = obs.photos?.[0]?.url.replace('square', 'medium') || '';
+          const user = obs.user?.login;
+
+          if (lat && lng) {
+            const popupContent = `
+              <b>${name}</b><br>
+              ${obs.place_guess || "Loc necunoscut"}<br>
+              ${photo ? `<img src="${photo}" width="150" />` : ''}
+              <br><i>observat de: ${user || "anonim"}</i>
+            `;
+            L.marker([lat, lng]).addTo(map).bindPopup(popupContent);
+          }
+        });
+
+        const first = data.results[0];
+        if (first?.geojson?.coordinates) {
+          map.setView([first.geojson.coordinates[1], first.geojson.coordinates[0]], 5);
+        }
+
+      } catch (error) {
+        alert("Eroare la interogarea iNaturalist: " + error.message);
+      }
+    }
+
+    // Pornire automată
+    searchPlant();
+  </script>
+
+</body>
+</html>
